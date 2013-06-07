@@ -1,39 +1,6 @@
 -module(modbus).
--export([send/6, send/4, createRequest/4, parseResponse/1]).
+-export([createRequest/4, parseResponse/1, parseData/3]).
 -export([parseCoilData/2, parseRegisterData/1, dataMatchKey/2]).
-
-send(Ip, Port, SlaveId, FunCode, Start, Number) ->
-    ReqBin = createRequest(SlaveId, FunCode, Start, Number),
-    send(Ip, Port, ReqBin, data).
-
-
-%% ---------------
-%% Ip, Port, ReqBin, ReturnType
-%% return binary
-send(Ip, Port, ReqBin, binary) ->
-    {ok, Socket} = gen_udp:open(0, [binary]),
-    % io:format("client opened socket=~p~n",[Socket]),
-    ok = gen_udp:send(Socket, Ip, Port, ReqBin),
-    ResponseBin = receive
-        {udp, Socket, _, _, Bin} ->
-            Bin
-        after 2000 ->
-            throw({timeoutError, 2000})
-        end,
-    gen_udp:close(Socket),
-    ResponseBin;
-%% ---------------
-%% Ip, Port, ReqBin, ReturnType
-%% return  {SlaveId, FunCode, DataByteSize, Data}
-send(Ip, Port, ReqBin, pdu) ->
-    parseResponse(send(Ip, Port, ReqBin, binary));
-%% ---------------
-%% Ip, Port, ReqBin, ReturnType
-%% return Data
-send(Ip, Port, ReqBin, data) ->
-    {_SlaveId, FunCode, DataByteSize, Data} = send(Ip, Port, ReqBin, pdu),
-    parseData(FunCode, DataByteSize, Data).
-
 
 %% ---------------
 %% return Cmd Bin
@@ -66,23 +33,9 @@ createRequest(SlaveId, FunCode, Start, Number) ->
     <<SlaveId:8, FunCode:8, Start:16, Number:16, CrcHighByte:8, CrcLowByte:8>>.
 
 %% ---------------
-%% parse response Bin
+%% parse read response pdu
 %% return {SlaveId, FunCode, DataByteSize, Data}
-parseResponse(ResponseBin) ->
-    ResponseBinSize = byte_size(ResponseBin),
-    if
-        ResponseBinSize =< 2 ->
-            throw({argumentError, ResponseBinSize});
-        true -> ok
-    end,
-    Pdu = binary_to_list(ResponseBin, 1, ResponseBinSize-2),
-    ResCrc = list_to_tuple(binary_to_list(ResponseBin, ResponseBinSize-1, ResponseBinSize)),
-    case crc:checkCRC(Pdu, ResCrc) of
-        true ->
-            ok;
-        false ->
-            throw({error, response_crc_error, ResCrc})
-    end,
+parseResponse(Pdu) ->
     [SlaveId, FunCode, DataByteSize | Data] = Pdu,
     {SlaveId, FunCode, DataByteSize, Data}.
  
@@ -90,7 +43,7 @@ parseResponse(ResponseBin) ->
 %% ----------------
 %% 解析数据值   
 parseData(FunCode, DataByteSize, Data) ->
-    io:format("FunCode=~p~n",[FunCode]),
+    % io:format("FunCode=~p~n",[FunCode]),
     case FunCode of
         T when T =:= 1 ; T =:= 2 ->
             % 离散量
@@ -125,10 +78,10 @@ parseCoilData_2([H | T], Rdata) ->
 %% ----------------
 %% 值匹配到key
 %% return [{key, value}, ...]
-dataMatchKey(Keys, Values) ->
-    dataMatchKey_3(Keys, Values, []).
+dataMatchKey(KeyRatios, Values) ->
+    dataMatchKey_3(KeyRatios, Values, []).
 
 dataMatchKey_3([], [], Rdata) ->
     lists:reverse(Rdata);
-dataMatchKey_3([Key | Tk], [Value | Tv], Rdata) ->
-    dataMatchKey_3(Tk, Tv, [{Key, Value} | Rdata]).
+dataMatchKey_3([{Key, Ratio} | Tk], [Value | Tv], Rdata) ->
+    dataMatchKey_3(Tk, Tv, [{Key, Value/Ratio} | Rdata]).
