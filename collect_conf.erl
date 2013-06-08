@@ -11,15 +11,16 @@
 -compile(export_all).
 
 
-start() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-stop()  -> gen_server:call(?MODULE, stop).
+start() -> gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
+stop()  -> gen_server:call({global, ?MODULE}, stop).
 
-add_serial_server(IpPort, Devs) -> gen_server:call(?MODULE, {add_serial_server, IpPort, Devs}).
+add_serial_server(IpPort, Devs) -> gen_server:call({global, ?MODULE}, {add_serial_server, IpPort, Devs}).
 % return old devs
-modify_serial_server(IpPort, Devs)  -> gen_server:call(?MODULE, {modify_serial_server, IpPort, Devs}).
-del_serial_server(IpPort) -> gen_server:call(?MODULE, {del_serial_server, IpPort}).
-get_all_serial_server() -> gen_server:call(?MODULE, {get_serial_server, all}).
-get_serial_server(IpPort) -> gen_server:call(?MODULE, {get_serial_server, IpPort}).
+modify_serial_server(IpPort, Devs)  -> gen_server:call({global, ?MODULE}, {modify_serial_server, IpPort, Devs}).
+del_serial_server(IpPort) -> gen_server:call({global, ?MODULE}, {del_serial_server, IpPort}).
+get_all_serial_server() -> gen_server:call({global, ?MODULE}, {get_serial_server, all}).
+get_serial_server(IpPort) -> gen_server:call({global, ?MODULE}, {get_serial_server, IpPort}).
+
 
 
 init([]) ->
